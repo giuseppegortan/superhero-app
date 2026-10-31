@@ -39,13 +39,22 @@
     border-radius:999px; padding:10px 16px; min-height:44px; cursor:pointer }
   .chip[aria-pressed=true] { background:var(--red); border-color:#000; box-shadow:2px 2px 0 var(--blue) }
 
-  #card { position:fixed; z-index:3; left:16px; bottom:84px; max-width:min(420px,calc(100vw - 32px)); display:none;
-    padding:12px 16px; background:var(--yellow); color:#000; border:3px solid #000; box-shadow:6px 6px 0 var(--red);
-    transform:skew(-2deg) }
-  #card b { display:block; font-size:1.5rem; color:var(--red); -webkit-text-stroke:1px #000; paint-order:stroke fill }
+  .panel { position:fixed; z-index:3; bottom:84px; width:min(420px,calc(100vw - 32px)); display:none;
+    padding:12px 16px; background:var(--yellow); color:#000; border:3px solid #000; box-shadow:6px 6px 0 var(--red) }
+  .panel b { display:block; font-size:1.5rem; color:var(--red); -webkit-text-stroke:1px #000; paint-order:stroke fill }
+  .panel small { display:block; margin-top:2px; font-weight:600 }
+  .panel .x { position:absolute; top:0; right:0; min-width:48px; min-height:48px; border:0; background:none;
+    font-size:1.8rem; font-weight:900; cursor:pointer }
+  #card { left:16px; transform:skew(-2deg); cursor:pointer }
   #card span { font-weight:700 }
-  #card small { display:block; margin-top:2px; font-weight:600 }
-  #card button { position:absolute; top:2px; right:6px; border:0; background:none; font-size:1.6rem; font-weight:900; cursor:pointer }
+  #card em { display:block; margin-top:6px; font-size:.8rem; font-style:normal; font-weight:800; color:var(--blue) }
+  #news { right:16px; transform:skew(2deg) }
+  #news ul { list-style:none; margin:8px 0 0; padding:0; max-height:calc(var(--h, 100vh) - 360px); overflow:auto; overscroll-behavior:contain }
+  #news li + li { border-top:2px dashed #0004 }
+  #news a { display:block; padding:10px 4px; min-height:48px; color:#000; text-decoration:none; font-weight:700 }
+  #news a small { color:var(--blue) }
+  #news p { margin:8px 0 0; font-size:.8rem; font-weight:700 }
+  @media (max-width:900px) { #news { left:16px } body.news #card { display:none !important } }
   #legend { position:fixed; right:16px; top:84px; z-index:1; font-size:.8rem; text-shadow:0 0 6px #000; pointer-events:none }
   #legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 5px 0 12px }
 </style>
@@ -60,17 +69,23 @@
   </div>
 </header>
 <div id="legend"><i style="background:var(--red)"></i>ultime 6 ore<i style="background:var(--sky)"></i>più vecchie</div>
-<div id="card" role="status"><button aria-label="Chiudi">×</button><b></b><span></span><small></small></div>
+<div id="card" class="panel" role="button" tabindex="0">
+  <button class="x" aria-label="Chiudi">×</button><b></b><span></span><small></small><em>👆 Tocca per le notizie</em>
+</div>
+<div id="news" class="panel" role="dialog" aria-label="Notizie">
+  <button class="x" aria-label="Chiudi">×</button><b>Notizie</b><small></small><ul></ul><p></p>
+</div>
 <div id="filters"></div>
 
 <script src="/vendor/globe.gl.min.js"></script>
 <script type="module">
-import { sync, STEP } from '/sync.js';
+import { sync, STEP, VERSION } from '/sync.js';
 
 const $ = (s) => document.querySelector(s);
 const KEY = 'spider-sense-db';
 const EMPTY = { at: 0, files: [], events: [] };
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || EMPTY; } catch { return EMPTY; } };
+// dati di una versione vecchia del filtro: li mostro finché non sincronizzi, ma at=0 forza la sync appena c'è rete
+const load = () => { try { const d = JSON.parse(localStorage.getItem(KEY)); return d ? (d.v === VERSION ? d : { ...d, at: 0 }) : EMPTY; } catch { return EMPTY; } };
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* quota: restano i dati in memoria */ } };
 let db = load();
 
@@ -95,6 +110,8 @@ function buildFilters() {
 
 // --- globo
 const recent = (d) => Date.now() - d.t < 6 * 36e5;
+const alt = (d) => 0.005 + Math.min(d.n, 20) / 600;
+let shown = [], sel = null; // punti sul globo, punto scelto
 const ago = (t) => { const h = (Date.now() - t) / 36e5; return h < 1 ? `${Math.max(1, Math.round(h * 60))} minuti fa` : `${Math.round(h)} ore fa`; };
 const globe = Globe()($('#globe'))
   .backgroundColor('rgba(0,0,0,0)')
@@ -102,34 +119,114 @@ const globe = Globe()($('#globe'))
   .atmosphereColor('#e62429').atmosphereAltitude(0.22)
   .pointLat('lat').pointLng('lng').pointRadius(0.3)
   .pointColor((d) => recent(d) ? '#ff2a2f' : '#3d7bff')
-  .pointAltitude((d) => 0.005 + Math.min(d.n, 20) / 600)
-  .onPointClick(show)
-  .ringLat('lat').ringLng('lng').ringColor(() => (t) => `rgba(255,42,47,${1 - t})`)
-  .ringMaxRadius(4).ringPropagationSpeed(2).ringRepeatPeriod(1400);
+  .pointAltitude(alt)
+  .ringLat('lat').ringLng('lng')
+  .ringColor((d) => (t) => `rgba(${d === sel ? '255,212,0' : '255,42,47'},${1 - t})`) // giallo = punto scelto
+  .ringMaxRadius((d) => (d === sel ? 7 : 4)).ringPropagationSpeed(2).ringRepeatPeriod(1400);
 const ctl = globe.controls();
 ctl.autoRotate = true; ctl.autoRotateSpeed = 0.4;
 ctl.addEventListener('start', () => (ctl.autoRotate = false));
-addEventListener('resize', () => globe.width(innerWidth).height(innerHeight));
+// innerHeight = area realmente visibile (100vh su Android include la barra del browser)
+const fit = () => { document.documentElement.style.setProperty('--h', innerHeight + 'px'); globe.width(innerWidth).height(innerHeight); };
+addEventListener('resize', fit);
+fit();
+
+// --- tocco: punto visibile più vicino al dito entro RAGGIO px (le barre sono sottili, non serve centrarle)
+const RAGGIO = 48;
+function tap(x, y) {
+  const cam = globe.camera().position;
+  let best = null, bd = RAGGIO;
+  for (const d of shown) {
+    const p = globe.getCoords(d.lat, d.lng, 0);
+    if (p.x * cam.x + p.y * cam.y + p.z * cam.z < p.x * p.x + p.y * p.y + p.z * p.z) continue; // lato nascosto
+    const s = globe.getScreenCoords(d.lat, d.lng, alt(d) / 2);
+    const dist = Math.hypot(s.x - x, s.y - y);
+    if (dist < bd) { bd = dist; best = d; }
+  }
+  if (best) show(best);
+}
+// tap = dito quasi fermo e breve, un solo dito (drag e pinch li gestisce OrbitControls)
+let down = null, fingers = 0, multi = false;
+const surface = $('#globe');
+surface.addEventListener('pointerdown', (e) => { fingers++; multi ||= fingers > 1; down = { x: e.clientX, y: e.clientY, t: e.timeStamp }; });
+surface.addEventListener('pointerup', (e) => {
+  fingers = Math.max(0, fingers - 1);
+  if (fingers) return;
+  const ok = !multi && down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 12 && e.timeStamp - down.t < 600;
+  multi = false;
+  if (ok) tap(e.clientX, e.clientY);
+});
+surface.addEventListener('pointercancel', () => { fingers = 0; multi = false; });
 
 function show(d) {
   ctl.autoRotate = false;
-  globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.2 }, 800);
+  sel = d;
+  if (globe.pointOfView().altitude > 1.5) globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.2 }, 800); // già zoomato: non muovere la vista
   const c = $('#card');
   c.style.display = 'block';
   // textContent: i nomi dei luoghi arrivano da GDELT, mai in innerHTML
   c.querySelector('b').textContent = d.type + '!';
   c.querySelector('span').textContent = d.place;
-  c.querySelector('small').textContent = `${ago(d.t)} · ${d.n} notizie`;
+  c.querySelector('small').textContent = `${ago(d.t)} · ${d.n} citazioni`;
+  globe.ringsData(rings());
+  if ($('#news').style.display === 'block') renderNews();
 }
-$('#card button').onclick = () => ($('#card').style.display = 'none');
+function close() {
+  sel = null;
+  $('#card').style.display = 'none';
+  setNews(false);
+  globe.ringsData(rings());
+}
+$('#card .x').onclick = (e) => { e.stopPropagation(); close(); };
+$('#card').onclick = () => setNews($('#news').style.display !== 'block');
+$('#news .x').onclick = () => setNews(false);
+
+// --- notizie dello stesso luogo del punto scelto (il suo articolo per primo)
+function setNews(open) {
+  $('#news').style.display = open ? 'block' : 'none';
+  document.body.classList.toggle('news', open);
+  if (open) renderNews();
+}
+const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+// GDELT non dà i titoli: li ricavo dallo slug dell'URL
+function headline(u) {
+  try {
+    const slug = decodeURIComponent(new URL(u).pathname.split('/').filter(Boolean).pop() || '').replace(/\.(html?|php|aspx?)$/i, '');
+    const w = slug.split(/[-_+\s]+/).filter((t) => !/\d{5,}/.test(t) && !/^(?=.*\d)[0-9a-f]{4,}$/i.test(t)); // via id numerici e hash
+    while (/^(ar|id|a|n|nid)$/i.test(w.at(-1) || '')) w.pop();
+    const t = w.join(' ');
+    return t.length > 12 ? t[0].toUpperCase() + t.slice(1) : host(u);
+  } catch { return u; }
+}
+function renderNews() {
+  if (!sel) return;
+  const items = visible().filter((e) => e.place === sel.place).sort((a, b) => (b === sel) - (a === sel) || b.t - a.t).slice(0, 30);
+  const n = $('#news');
+  n.querySelector('small').textContent = `${sel.place} · ${items.length} ${items.length === 1 ? 'notizia' : 'notizie'}`;
+  n.querySelector('ul').replaceChildren(...items.map((e) => {
+    const a = Object.assign(document.createElement('a'), { target: '_blank', rel: 'noopener noreferrer' });
+    if (/^https?:\/\//.test(e.u)) a.href = e.u;
+    a.append(headline(e.u), Object.assign(document.createElement('small'), { textContent: `${e === sel ? '📍 Questo punto · ' : ''}${host(e.u)} · ${e.type} · ${ago(e.t)}` }));
+    const li = document.createElement('li');
+    li.append(a);
+    return li;
+  }));
+  n.querySelector('p').textContent = navigator.onLine ? '' : 'Sei offline: i link si aprono solo con internet.';
+}
+
+const visible = () => { const now = Date.now(); return db.events.filter((e) => filt.types.has(e.type) && now - e.t <= filt.maxAge * 36e5); };
+const rings = () => {
+  const r = shown.filter(recent).sort((a, b) => b.t - a.t).slice(0, 40).filter((d) => d !== sel);
+  return sel ? [...r, sel] : r;
+};
 
 function render() {
-  const now = Date.now();
-  const data = db.events.filter((e) => filt.types.has(e.type) && now - e.t <= filt.maxAge * 36e5)
-    .sort((a, b) => b.n - a.n).slice(0, 1500); // ponytail: top 1500 per citazioni, per non appesantire il tablet
-  globe.pointsData(data).ringsData(data.filter(recent).sort((a, b) => b.t - a.t).slice(0, 40));
+  shown = visible().sort((a, b) => b.n - a.n).slice(0, 1500); // ponytail: top 1500 per citazioni, per non appesantire il tablet
+  if (sel && !shown.includes(sel)) close(); // filtro o sync hanno tolto il punto scelto
+  const data = shown;
+  globe.pointsData(data).ringsData(rings());
   const when = db.at ? new Date(db.at).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'mai';
-  $('#stat').textContent = db.at ? `${data.length} segnalazioni · dati di ${when}` : 'Nessun dato: premi Sincronizza (serve internet)';
+  $('#stat').textContent = db.at ? `${data.length} segnalazioni · dati di ${when}` : db.events.length ? 'Dati vecchi: premi Sincronizza (serve internet)' : 'Nessun dato: premi Sincronizza (serve internet)';
 }
 
 // --- sincronizzazione
@@ -154,7 +251,12 @@ let prompt;
 addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); prompt = e; $('#install').style.display = ''; });
 $('#install').onclick = () => prompt?.prompt();
 addEventListener('appinstalled', () => ($('#install').style.display = 'none'));
-navigator.serviceWorker?.register('/sw.js');
+if (navigator.serviceWorker) {
+  const updating = !!navigator.serviceWorker.controller; // false alla prima installazione
+  // il browser non controlla da solo se sw.js è cambiato: lo chiedo io. Offline: ignorato.
+  navigator.serviceWorker.register('/sw.js').then((r) => r.update()).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => updating && location.reload()); // nuova versione attiva: una sola ricarica
+}
 
 // --- ragnatela decorativa
 const web = (() => {

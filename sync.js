@@ -1,6 +1,7 @@
 // Scarica gli eventi GDELT (file raw da 15 min, CORS aperto) e tiene le ultime 48h.
 // db = { at, files: [timestamp già scaricati], events: [{lat,lng,type,place,n,t,u}] }
 export const STEP = 15 * 60e3;
+export const VERSION = 2; // cambia quando cambia il filtro: i dati salvati vecchi vengono scartati alla prossima sync
 const WINDOW = 48 * 3600e3;
 // CAMEO: 173 arresto, 182 aggressione (esclusi 1821 sessuale, 1822 tortura, 1823 omicidio). 180 escluso: quasi solo guerra.
 const LABEL = { 173: 'Arresto', 182: 'Aggressione' };
@@ -23,13 +24,15 @@ async function loadFile(ts) {
     const c = row.split('\t');
     if (c.length < 58) continue;
     const lat = parseFloat(c[56]), lng = parseFloat(c[57]);
-    if (!LABEL[c[27]] || SKIP.has(c[26]) || isNaN(lat) || isNaN(lng)) continue;
+    // ActionGeo_Type: 3 città USA, 4 città nel mondo. 1 paese / 2 e 5 stato sono centri geografici, non il luogo dell'evento
+    if (!LABEL[c[27]] || SKIP.has(c[26]) || (c[51] !== '3' && c[51] !== '4') || isNaN(lat) || isNaN(lng)) continue;
     out.push({ lat, lng, type: LABEL[c[27]], place: c[52], n: +c[31], t: parseStamp(c[59]), u: c[60] });
   }
   return out;
 }
 
 export async function sync(db, progress = () => {}) {
+  if (db.v !== VERSION) db = { at: 0, files: [], events: [] };
   const now = Date.now(), last = Math.floor(now / STEP) * STEP;
   const have = new Set(db.files);
   const todo = [];
@@ -46,5 +49,5 @@ export async function sync(db, progress = () => {}) {
 
   const seen = new Set(); // stessa notizia nello stesso posto
   events = events.sort((a, b) => b.t - a.t).filter((e) => !seen.has(e.u + e.place) && seen.add(e.u + e.place));
-  return { at: now, files, events };
+  return { v: VERSION, at: now, files, events };
 }
