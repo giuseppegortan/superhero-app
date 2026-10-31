@@ -98,8 +98,17 @@ I service worker richiedono `https` oppure `localhost`: da un indirizzo di rete 
 
 Il progetto è un sito statico su Vercel (`framework: null`, nessuna build). Il repository è collegato a Vercel: a ogni push su `main` parte un nuovo deploy. Dopo una modifica ai file in cache ricorda di aumentare `V` in `sw.js`.
 
+## Licenza
+
+Il codice di questo progetto è rilasciato con licenza [MIT](LICENSE), © 2026 Giuseppe Gortan.
+
+La licenza copre solo il codice. Non copre:
+- il nome, il personaggio e l'immaginario di Spider-Man, che restano di Marvel;
+- i dati di GDELT, che hanno le loro condizioni d'uso;
+- le librerie in `vendor/`, che mantengono le proprie licenze (vedi Crediti).
+
 ## Crediti
 
 - Dati: [GDELT Project](https://www.gdeltproject.org/), uso gratuito con citazione della fonte.
-- Globo 3D: [globe.gl](https://globe.gl/) e [three-globe](https://github.com/vasturiano/three-globe) di Vasco Asturiano (licenza MIT), con [three.js](https://threejs.org/).
+- Globo 3D: [globe.gl](https://globe.gl/) e [three-globe](https://github.com/vasturiano/three-globe) di Vasco Asturiano (licenza MIT), con [three.js](https://threejs.org/) (MIT). Il file `vendor/globe.gl.min.js` è un bundle che include anche altro codice di terzi con licenze proprie, per esempio h3-js di Uber (Apache 2.0): le note sono nell'intestazione del file.
 - Spider-Man è un personaggio Marvel: questo è un progetto personale e senza scopo di lucro, non affiliato né approvato da Marvel.
