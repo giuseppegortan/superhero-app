@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a1a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon-192.png">
+<title>Spider-Sense</title>
+<style>
+  :root { --red:#e62429; --blue:#1c4fd6; --sky:#3d7bff; --ink:#05060f; --yellow:#ffd400; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent }
+  html,body { margin:0; height:100%; overflow:hidden; color:#fff; font:16px system-ui,sans-serif;
+    background:radial-gradient(circle at 1.5px 1.5px, #1c4fd655 1.2px, transparent 1.8px) 0 0/12px 12px,
+               radial-gradient(ellipse at 50% 45%, #1b1240 0%, var(--ink) 70%) }
+  .comic { font-weight:900; font-style:italic; text-transform:uppercase; letter-spacing:.04em }
+  #globe { position:fixed; inset:0 }
+  .web { position:fixed; width:min(34vw,260px); color:#fff; opacity:.28; pointer-events:none }
+  .web.tl { top:0; left:0 } .web.br { bottom:0; right:0; transform:rotate(180deg) }
+
+  header { position:fixed; top:0; left:0; right:0; z-index:2; padding:max(10px,env(safe-area-inset-top)) 16px 10px;
+    display:flex; justify-content:space-between; align-items:flex-start; gap:12px; pointer-events:none }
+  header > * { pointer-events:auto }
+  h1 { margin:0; font-size:clamp(1.6rem,4vw,2.4rem); line-height:1; color:var(--red);
+    -webkit-text-stroke:2px #000; paint-order:stroke fill; text-shadow:3px 3px 0 var(--blue), 5px 5px 0 #000 }
+  #stat { margin-top:8px; font-size:.85rem; opacity:.85; text-shadow:0 0 6px #000 }
+  .btn { font:inherit; font-weight:900; font-style:italic; text-transform:uppercase; letter-spacing:.04em; color:#fff;
+    background:var(--red); border:3px solid #000; border-radius:10px; padding:10px 14px; min-height:44px;
+    box-shadow:3px 3px 0 var(--blue); transform:rotate(-1.5deg); cursor:pointer }
+  .btn:active { transform:translate(2px,2px) rotate(-1.5deg); box-shadow:1px 1px 0 var(--blue) }
+  .btn:disabled { opacity:.6 }
+  #actions { display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end }
+  #install { display:none; background:var(--blue); box-shadow:3px 3px 0 var(--red) }
+
+  #filters { position:fixed; left:0; right:0; bottom:0; z-index:2; padding:10px 16px max(12px,env(safe-area-inset-bottom));
+    display:flex; flex-wrap:wrap; gap:8px 10px; justify-content:center }
+  #filters .sep { width:2px; background:#fff3; margin:0 4px }
+  .chip { font:inherit; font-weight:800; font-size:.95rem; color:#fff; background:#0b0d1ecc; border:2px solid var(--sky);
+    border-radius:999px; padding:10px 16px; min-height:44px; cursor:pointer }
+  .chip[aria-pressed=true] { background:var(--red); border-color:#000; box-shadow:2px 2px 0 var(--blue) }
+
+  #card { position:fixed; z-index:3; left:16px; bottom:84px; max-width:min(420px,calc(100vw - 32px)); display:none;
+    padding:12px 16px; background:var(--yellow); color:#000; border:3px solid #000; box-shadow:6px 6px 0 var(--red);
+    transform:skew(-2deg) }
+  #card b { display:block; font-size:1.5rem; color:var(--red); -webkit-text-stroke:1px #000; paint-order:stroke fill }
+  #card span { font-weight:700 }
+  #card small { display:block; margin-top:2px; font-weight:600 }
+  #card button { position:absolute; top:2px; right:6px; border:0; background:none; font-size:1.6rem; font-weight:900; cursor:pointer }
+  #legend { position:fixed; right:16px; top:84px; z-index:1; font-size:.8rem; text-shadow:0 0 6px #000; pointer-events:none }
+  #legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 5px 0 12px }
+</style>
+</head>
+<body>
+<div id="globe"></div>
+<header>
+  <div><h1 class="comic">🕷️ Spider-Sense</h1><div id="stat">…</div></div>
+  <div id="actions">
+    <button class="btn" id="install">Installa</button>
+    <button class="btn" id="syncBtn">⟳ Sincronizza</button>
+  </div>
+</header>
+<div id="legend"><i style="background:var(--red)"></i>ultime 6 ore<i style="background:var(--sky)"></i>più vecchie</div>
+<div id="card" role="status"><button aria-label="Chiudi">×</button><b></b><span></span><small></small></div>
+<div id="filters"></div>
+
+<script src="/vendor/globe.gl.min.js"></script>
+<script type="module">
+import { sync, STEP } from '/sync.js';
+
+const $ = (s) => document.querySelector(s);
+const KEY = 'spider-sense-db';
+const EMPTY = { at: 0, files: [], events: [] };
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || EMPTY; } catch { return EMPTY; } };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* quota: restano i dati in memoria */ } };
+let db = load();
+
+// --- filtri
+const TYPES = [['Arresto', '🚔 Arresti'], ['Aggressione', '👊 Risse']];
+const AGES = [['6 ore', 6], ['24 ore', 24], ['Tutto', Infinity]];
+const filt = { types: new Set(TYPES.map(([k]) => k)), maxAge: Infinity };
+const chip = (label, pressed, onclick) => {
+  const b = Object.assign(document.createElement('button'), { className: 'chip', textContent: label, onclick });
+  b.setAttribute('aria-pressed', pressed);
+  return b;
+};
+function buildFilters() {
+  const bar = $('#filters');
+  bar.replaceChildren(
+    ...TYPES.map(([k, label]) => chip(label, filt.types.has(k), () => {
+      filt.types.has(k) ? filt.types.delete(k) : filt.types.add(k); buildFilters(); render();
+    })),
+    Object.assign(document.createElement('div'), { className: 'sep' }),
+    ...AGES.map(([label, h]) => chip(label, filt.maxAge === h, () => { filt.maxAge = h; buildFilters(); render(); })));
+}
+
+// --- globo
+const recent = (d) => Date.now() - d.t < 6 * 36e5;
+const ago = (t) => { const h = (Date.now() - t) / 36e5; return h < 1 ? `${Math.max(1, Math.round(h * 60))} minuti fa` : `${Math.round(h)} ore fa`; };
+const globe = Globe()($('#globe'))
+  .backgroundColor('rgba(0,0,0,0)')
+  .globeImageUrl('/vendor/earth-night.jpg').bumpImageUrl('/vendor/earth-topology.png')
+  .atmosphereColor('#e62429').atmosphereAltitude(0.22)
+  .pointLat('lat').pointLng('lng').pointRadius(0.3)
+  .pointColor((d) => recent(d) ? '#ff2a2f' : '#3d7bff')
+  .pointAltitude((d) => 0.005 + Math.min(d.n, 20) / 600)
+  .onPointClick(show)
+  .ringLat('lat').ringLng('lng').ringColor(() => (t) => `rgba(255,42,47,${1 - t})`)
+  .ringMaxRadius(4).ringPropagationSpeed(2).ringRepeatPeriod(1400);
+const ctl = globe.controls();
+ctl.autoRotate = true; ctl.autoRotateSpeed = 0.4;
+ctl.addEventListener('start', () => (ctl.autoRotate = false));
+addEventListener('resize', () => globe.width(innerWidth).height(innerHeight));
+
+function show(d) {
+  ctl.autoRotate = false;
+  globe.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.2 }, 800);
+  const c = $('#card');
+  c.style.display = 'block';
+  // textContent: i nomi dei luoghi arrivano da GDELT, mai in innerHTML
+  c.querySelector('b').textContent = d.type + '!';
+  c.querySelector('span').textContent = d.place;
+  c.querySelector('small').textContent = `${ago(d.t)} · ${d.n} notizie`;
+}
+$('#card button').onclick = () => ($('#card').style.display = 'none');
+
+function render() {
+  const now = Date.now();
+  const data = db.events.filter((e) => filt.types.has(e.type) && now - e.t <= filt.maxAge * 36e5)
+    .sort((a, b) => b.n - a.n).slice(0, 1500); // ponytail: top 1500 per citazioni, per non appesantire il tablet
+  globe.pointsData(data).ringsData(data.filter(recent).sort((a, b) => b.t - a.t).slice(0, 40));
+  const when = db.at ? new Date(db.at).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : 'mai';
+  $('#stat').textContent = db.at ? `${data.length} segnalazioni · dati di ${when}` : 'Nessun dato: premi Sincronizza (serve internet)';
+}
+
+// --- sincronizzazione
+async function doSync() {
+  const btn = $('#syncBtn');
+  btn.disabled = true;
+  try {
+    db = await sync(db, (d, t) => ($('#stat').textContent = `Sincronizzo ${d}/${t}…`));
+    save();
+  } catch {
+    $('#stat').textContent = 'Niente rete: uso i dati salvati';
+    return setTimeout(render, 2500);
+  } finally { btn.disabled = false; }
+  render();
+}
+$('#syncBtn').onclick = doSync;
+addEventListener('online', doSync);
+if (navigator.onLine && Date.now() - db.at > 2 * STEP) doSync();
+
+// --- installazione e offline
+let prompt;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); prompt = e; $('#install').style.display = ''; });
+$('#install').onclick = () => prompt?.prompt();
+addEventListener('appinstalled', () => ($('#install').style.display = 'none'));
+navigator.serviceWorker?.register('/sw.js');
+
+// --- ragnatela decorativa
+const web = (() => {
+  const A = [0, .2, .4, .6, .8, 1].map((x) => x * Math.PI / 2);
+  const p = (r, a) => `${(r * Math.cos(a)).toFixed(1)},${(r * Math.sin(a)).toFixed(1)}`;
+  let d = A.map((a) => `M0,0L${p(195, a)}`).join('');
+  for (const r of [30, 60, 95, 135, 180]) {
+    d += `M${p(r, 0)}`;
+    for (let i = 1; i < A.length; i++) d += `Q${p(r * .86, (A[i - 1] + A[i]) / 2)} ${p(r, A[i])}`;
+  }
+  return `<svg viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="1.2"><path d="${d}"/></svg>`;
+})();
+document.body.insertAdjacentHTML('beforeend', `<div class="web tl">${web}</div><div class="web br">${web}</div>`);
+
+buildFilters();
+render();
+setInterval(render, 60e3);
+</script>
+</body>
+</html>
