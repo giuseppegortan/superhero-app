@@ -45,16 +45,8 @@
   .panel small { display:block; margin-top:2px; font-weight:600 }
   .panel .x { position:absolute; top:0; right:0; min-width:48px; min-height:48px; border:0; background:none;
     font-size:1.8rem; font-weight:900; cursor:pointer }
-  #card { left:16px; transform:skew(-2deg); cursor:pointer }
+  #card { left:16px; transform:skew(-2deg) }
   #card span { font-weight:700 }
-  #card em { display:block; margin-top:6px; font-size:.8rem; font-style:normal; font-weight:800; color:var(--blue) }
-  #news { right:16px; transform:skew(2deg) }
-  #news ul { list-style:none; margin:8px 0 0; padding:0; max-height:calc(var(--h, 100vh) - 360px); overflow:auto; overscroll-behavior:contain }
-  #news li + li { border-top:2px dashed #0004 }
-  #news a { display:block; padding:10px 4px; min-height:48px; color:#000; text-decoration:none; font-weight:700 }
-  #news a small { color:var(--blue) }
-  #news p { margin:8px 0 0; font-size:.8rem; font-weight:700 }
-  @media (max-width:900px) { #news { left:16px } body.news #card { display:none !important } }
   #legend { position:fixed; right:16px; top:84px; z-index:1; font-size:.8rem; text-shadow:0 0 6px #000; pointer-events:none }
   #legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin:0 5px 0 12px }
 </style>
@@ -69,11 +61,8 @@
   </div>
 </header>
 <div id="legend"><i style="background:var(--red)"></i>ultime 6 ore<i style="background:var(--sky)"></i>più vecchie</div>
-<div id="card" class="panel" role="button" tabindex="0">
-  <button class="x" aria-label="Chiudi">×</button><b></b><span></span><small></small><em>👆 Tocca per le notizie</em>
-</div>
-<div id="news" class="panel" role="dialog" aria-label="Notizie">
-  <button class="x" aria-label="Chiudi">×</button><b>Notizie</b><small></small><ul></ul><p></p>
+<div id="card" class="panel" role="status">
+  <button class="x" aria-label="Chiudi">×</button><b></b><span></span><small></small>
 </div>
 <div id="filters"></div>
 
@@ -127,7 +116,7 @@ const ctl = globe.controls();
 ctl.autoRotate = true; ctl.autoRotateSpeed = 0.4;
 ctl.addEventListener('start', () => (ctl.autoRotate = false));
 // innerHeight = area realmente visibile (100vh su Android include la barra del browser)
-const fit = () => { document.documentElement.style.setProperty('--h', innerHeight + 'px'); globe.width(innerWidth).height(innerHeight); };
+const fit = () => globe.width(innerWidth).height(innerHeight);
 addEventListener('resize', fit);
 fit();
 
@@ -169,50 +158,13 @@ function show(d) {
   c.querySelector('span').textContent = d.place;
   c.querySelector('small').textContent = `${ago(d.t)} · ${d.n} citazioni`;
   globe.ringsData(rings());
-  if ($('#news').style.display === 'block') renderNews();
 }
 function close() {
   sel = null;
   $('#card').style.display = 'none';
-  setNews(false);
   globe.ringsData(rings());
 }
-$('#card .x').onclick = (e) => { e.stopPropagation(); close(); };
-$('#card').onclick = () => setNews($('#news').style.display !== 'block');
-$('#news .x').onclick = () => setNews(false);
-
-// --- notizie dello stesso luogo del punto scelto (il suo articolo per primo)
-function setNews(open) {
-  $('#news').style.display = open ? 'block' : 'none';
-  document.body.classList.toggle('news', open);
-  if (open) renderNews();
-}
-const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
-// GDELT non dà i titoli: li ricavo dallo slug dell'URL
-function headline(u) {
-  try {
-    const slug = decodeURIComponent(new URL(u).pathname.split('/').filter(Boolean).pop() || '').replace(/\.(html?|php|aspx?)$/i, '');
-    const w = slug.split(/[-_+\s]+/).filter((t) => !/\d{5,}/.test(t) && !/^(?=.*\d)[0-9a-f]{4,}$/i.test(t)); // via id numerici e hash
-    while (/^(ar|id|a|n|nid)$/i.test(w.at(-1) || '')) w.pop();
-    const t = w.join(' ');
-    return t.length > 12 ? t[0].toUpperCase() + t.slice(1) : host(u);
-  } catch { return u; }
-}
-function renderNews() {
-  if (!sel) return;
-  const items = visible().filter((e) => e.place === sel.place).sort((a, b) => (b === sel) - (a === sel) || b.t - a.t).slice(0, 30);
-  const n = $('#news');
-  n.querySelector('small').textContent = `${sel.place} · ${items.length} ${items.length === 1 ? 'notizia' : 'notizie'}`;
-  n.querySelector('ul').replaceChildren(...items.map((e) => {
-    const a = Object.assign(document.createElement('a'), { target: '_blank', rel: 'noopener noreferrer' });
-    if (/^https?:\/\//.test(e.u)) a.href = e.u;
-    a.append(headline(e.u), Object.assign(document.createElement('small'), { textContent: `${e === sel ? '📍 Questo punto · ' : ''}${host(e.u)} · ${e.type} · ${ago(e.t)}` }));
-    const li = document.createElement('li');
-    li.append(a);
-    return li;
-  }));
-  n.querySelector('p').textContent = navigator.onLine ? '' : 'Sei offline: i link si aprono solo con internet.';
-}
+$('#card .x').onclick = close;
 
 const visible = () => { const now = Date.now(); return db.events.filter((e) => filt.types.has(e.type) && now - e.t <= filt.maxAge * 36e5); };
 const rings = () => {

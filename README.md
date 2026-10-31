@@ -29,7 +29,7 @@ Non esiste un database mondiale dei crimini in tempo reale: i dati ufficiali son
 | `place`, `lat`, `lng` | luogo dell'evento secondo GDELT |
 | `n` | numero di citazioni dell'evento nelle notizie |
 | `t` | quando GDELT l'ha registrato |
-| `u` | indirizzo dell'articolo di origine |
+| `u` | indirizzo dell'articolo di origine: serve solo per scartare i doppioni, **non viene mai mostrato né aperto** |
 
 **Cosa scarto** (scelte fatte apposta per un bambino e per la precisione):
 
@@ -43,15 +43,13 @@ Finestra: ultime 48 ore. Sul globo vengono disegnati al massimo 1500 punti, i pi
 
 - **Sono notizie, non statistiche.** Un punto non dice quanti crimini ci sono in una città, ma che un articolo ne parla.
 - **La posizione è approssimata.** GDELT sceglie il luogo leggendo il testo: un articolo su un autista senegalese condannato in Ohio può finire su Dakar.
-- **I titoli sono ricavati dall'indirizzo** dell'articolo, perché GDELT non li fornisce. Se l'indirizzo non contiene un titolo si vede solo il sito.
-- Gli articoli sono quelli di giornali veri e possono contenere cronaca dura. I link portano a siti esterni non filtrati.
+- **Le notizie non sono consultabili dall'app, per scelta.** In una versione precedente la scheda apriva l'elenco degli articoli del luogo, ma molti arresti riguardano reati non adatti a un bambino: la funzione è stata rimossa. Si vedono solo tipo, luogo, ore fa e citazioni. Anche i tipi di evento scelti (arresti e risse) restano cronaca: per un uso con un bambino conviene comunque accompagnarlo.
 - Ogni tanto GDELT salta un file da 15 minuti: l'app lo riprova alla sincronizzazione successiva.
 
 ## Come si usa
 
 - **Ruota** il globo col dito, **pizzica** per lo zoom.
 - **Tocca** vicino a un punto: l'app sceglie il punto visibile più vicino entro circa 48 px (non serve centrare la barra sottile). Compare un anello giallo e la scheda con tipo, luogo, ore fa e citazioni.
-- **Tocca la scheda** a sinistra: si apre a destra l'elenco delle notizie dello stesso luogo, con in cima quella del punto scelto (📍).
 - **Filtri** in basso: Arresti / Risse, e per età 6 ore / 24 ore / Tutto.
 - **Sincronizza** in alto a destra: scarica i dati nuovi (solo i file mancanti dopo la prima volta, la prima volta ~10 MB). Parte da sola all'avvio se c'è rete e i dati hanno più di 30 minuti.
 - **Installa** dal menu del browser (o dal pulsante che compare): l'app finisce nella home con la sua icona.

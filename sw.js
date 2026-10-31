@@ -1,5 +1,5 @@
 // Offline-first: tutto in cache, aggiornato in background quando c'è rete. Cambia V per forzare il rinnovo.
-const V = 'spider-sense-v7';
+const V = 'spider-sense-v8';
 const ASSETS = ['/', '/sync.js', '/manifest.webmanifest', '/vendor/globe.gl.min.js', '/vendor/earth-night.jpg',
   '/vendor/earth-topology.png', '/icons/icon-192.png', '/icons/icon-512.png'];
 
